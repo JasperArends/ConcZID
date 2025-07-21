@@ -14,7 +14,7 @@
 ####################
 spm_foot.est <- function(X, Y) {
   Q.HM <- QM.est(X, Y)
-  Q.MM <- spm_foot.bound_est(X,Y)$up
+  Q.MM <- (1 - max(sum(X==0)/length(X),sum(Y==0)/length(Y))^2)
   
   return ( (3 * Q.HM - Q.MM)/2 )
 }
@@ -67,7 +67,7 @@ spm_rho.est <- function(X, Y) {
   
   ######################################
   # Spearman's rho for positive values
-  rho11 <- cor(X[D11], Y[D11], method="spearman")
+  rho11 <- ifelse(length(D11) > 0, cor(X[D11], Y[D11], method="spearman"), 0)
   rho10 <- ifelse(length(D10) > 0 & length(D11) > 0,
                   12 * mean( colMeans(outer(X[D10], X[D11], FUN = "<")) *
                                colMeans(outer(Y[D11], Y[D11], FUN = "<"))) - 6 * (1 - p1s),
@@ -186,7 +186,7 @@ QW.est <- function(X, Y) {
     RpI <- rep(0, N) # R(X | X > 0 and F(X) <= 1 - p2)
     RpI[QI] <- rank(X[QI])/sum(QI)
     RpII <- rep(0, N) # R(X | F(X) > 1 - p2)
-    RpII[Q11II] <- rank(X[Q11II])/sum(Q11II)
+    RpII[QII] <- rank(X[QII])/sum(QII)
     
     #   Ranks of Y
     SpA <- rep(0, N) # R(Y | Y > 0 and G(Y) <= 1 - p1)
