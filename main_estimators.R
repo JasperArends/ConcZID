@@ -77,8 +77,8 @@ spm_rho.est <- function(X, Y) {
                                colMeans(outer(Y[D01], Y[D11], FUN = "<"))) - 6 * (1 - p2s),
                   0)
   rho00 <- ifelse(length(D10) > 0 & length(D01) > 0,
-                  12 * mean( colMeans(outer(X[D10], X[D11], FUN = "<")) *
-                               colMeans(outer(Y[D01], Y[D11], FUN = "<")) ) + 3 - 6 * (p1s + p2s),
+                  12 * mean( colMeans(outer(X[D10], X[D11], FUN = ">")) *
+                               colMeans(outer(Y[D01], Y[D11], FUN = ">")) ) + 3 - 6 * (p1s + p2s),
                   0)
   
   ######################################
@@ -102,6 +102,13 @@ QM.est <- function(X, Y) {
   N <- length(X)
   if (length(Y) != N) {
     stop("X and Y must have the same length.")
+  }
+
+  # Assume p1 <= p2
+  if (sum(X == 0) > sum(Y == 0)) {
+    Z <- X
+    X <- Y
+    Y <- Z
   }
   
   # Probability masses
@@ -156,6 +163,13 @@ QW.est <- function(X, Y) {
   N <- length(X)
   if (length(Y) != N) {
     stop("X and Y must have the same length.")
+  }
+
+  # Assume p1 <= p2
+  if (sum(X == 0) > sum(Y == 0)) {
+    Z <- X
+    X <- Y
+    Y <- Z
   }
   
   # Probability masses
