@@ -18,8 +18,8 @@ gen_sample <- function(N, alpha, p1, p2) {
   Z <- runif(N, min=0, max=1) # Decision variable
   V <- runif(N, min=0, max=1) # Independent sample
   
-  U[,2] <- (Z <= alpha) * U[,1] + # Upper Fréchet-Hoeffding copula
-    (Z <= -alpha) * (1 - U[,1]) + # Lower Fréchet-Hoeffding copula
+  U[,2] <- (Z <= alpha & alpha > 0) * U[,1] + # Upper Fréchet-Hoeffding copula
+    (Z <= -alpha & alpha < 0) * (1 - U[,1]) + # Lower Fréchet-Hoeffding copula
     (Z > abs(alpha)) * V # Independence copula
   
   # Induce inflation
@@ -58,6 +58,10 @@ corr_bzid_simulation_main <- function(N, sim, alpha, p1, p2) {
     # Generate sample
     X <- gen_sample(N, alpha, p1, p2)
     
+    # Assume p1 <= p2
+    if (sum(X[,2] == 0) < sum(X[,1] == 0))
+      X <- X[,c(2, 1)]
+    
     results[ix,] <- c(ix,
                       gini_gamma.est(X[,1], X[,2]),
                       spm_foot.est(X[,1], X[,2]),
@@ -69,9 +73,14 @@ corr_bzid_simulation_main <- function(N, sim, alpha, p1, p2) {
 
 corr_bzid_simulation_stats <- function(results, alpha, p1, p2) {
   # Compute true values
-  conc_true <- list(gini_gamma = gini_gamma.bound(p1,p2)$up * alpha,
-                    spm_foot = spm_foot.bound(p1,p2)$up * alpha,
-                    spm_rho = spm_rho.bound(p1,p2)$up * alpha)
+  conc_true <- list(gini_gamma = gini_gamma.indep(p1,p2) * (1 - abs(alpha)) +
+                      gini_gamma.bound(p1,p2)$up * alpha * (alpha > 0) -
+                      gini_gamma.bound(p1,p2)$lw * alpha * (alpha < 0),
+                    spm_foot = spm_foot.indep(p1,p2) * (1 - abs(alpha)) +
+                      spm_foot.bound(p1,p2)$up * alpha * (alpha > 0) -
+                      spm_foot.bound(p1,p2)$lw * alpha * (alpha < 0),
+                    spm_rho = spm_rho.bound(p1,p2)$up * alpha * (alpha > 0) -
+                      spm_rho.bound(p1,p2)$lw * alpha * (alpha < 0))
   
   # Statistics
   corr_stat <- data.frame(matrix(nrow=3, ncol=7))
@@ -145,8 +154,25 @@ spm_rho.bound <- function(p1, p2) {
   
   # Lower bound
   spm_rho.lw <- ifelse(p1 + p2 <= 1,
-                       p1^3 + p2^2 - 1,
+                       p1^3 + p2^3 - 1,
                        -3 * (1 - p1) * (1 - p2))
   
   return (list(up=spm_rho.up, lw=spm_rho.lw))
+}
+
+####################
+# VALUES UNDER
+# INDEPENDENCE
+####################
+
+gini_gamma.indep <- function(p1, p2) {
+  spm_rho <- spm_rho.bound(p1, p2)
+  
+  return ( spm_rho$up/3 + spm_rho$lw/3 )
+}
+
+spm_foot.indep <- function(p1, p2) {
+  spm_rho <- spm_rho.bound(p1, p2)
+  
+  return ( (spm_rho$up - (1 - max(p1,p2)^2 ))/2 )
 }
