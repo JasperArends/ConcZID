@@ -1,49 +1,134 @@
-####################
-# SIMULATIONS
-####################
-# In the following, the performance of the estimators are investigated based
-# on simulations. Samples are generated from the Fréchet copula with parameter
-# alpha.
+########################################
+# PERFORM SIMULATIONS
+########################################
+# The performance of the estimators are investigated based on simulations.
+# Samples are generated from the Fréchet copula with parameter alpha.
 
-source("simulations.R")
+# Load dependencies
+source("simulation_functions.R")
 source("main_estimators.R")
 
-# Define parameters
-N <- 250 # Sample sizes
-p1 <- 0.2 # P(X = 0)
-p2 <- 0.6 # P(Y = 0)
-alpha <- 0 # Copula parameter
-sim <- 1000 # Number of simulations
+# Reproducability
+set.seed(1)
 
-# Perform simulations
-results <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+#########################
+# Global constants
+#########################
+N <- 150 # Number of observations
+sim <- 1000 # Number of runs
 
-# Compute statistics
-stat <- corr_bzid_simulation_stats(results, alpha, p1, p2)
+########################################
+# MAIN ESTIMATORS
+########################################
 
-# Plot results
-library(ggplot2)
-library(gridExtra)
+#########################
+# INFLATION COMBINATION 1
+#########################
 
-grid.arrange(
-  # Gini's gamma
-  ggplot(results) +
-    geom_boxplot(aes(y=Gini_gamma), outlier.size=.2, linewidth=.1) +
-    geom_hline(yintercept=as.double(stat$True[1]),
-               col='red', linetype='dashed') +
-    theme_classic(),
-  
-  # Spearman's footrule
-  ggplot(results) +
-    geom_boxplot(aes(y=Spm_foot), outlier.size=.2, linewidth=.1) +
-    geom_hline(yintercept=as.double(stat$True[2]),
-               col='red', linetype='dashed') +
-    theme_classic(),
-  
-  # Spearman's rho
-  ggplot(results) +
-    geom_boxplot(aes(y=Spm_rho), outlier.size=.2, linewidth=.1) +
-    geom_hline(yintercept=as.double(stat$True[3]),
-               col='red', linetype='dashed') +
-    theme_classic()
-)
+p1 <- .2
+p2 <- .2
+
+# Low dependence
+alpha <- .2
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+# Mixed dependence
+alpha <- .5
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+# High dependence
+alpha <- .8
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+#########################
+# INFLATION COMBINATION 2
+#########################
+
+p1 <- .2
+p2 <- .8
+
+# Low dependence
+alpha <- .2
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+# Mixed dependence
+alpha <- .5
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+# High dependence
+alpha <- .8
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+#########################
+# INFLATION COMBINATION 3
+#########################
+
+p1 <- .8
+p2 <- .8
+
+# Low dependence
+alpha <- .2
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+# Mixed dependence
+alpha <- .5
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+# High dependence
+alpha <- .8
+df.sim <- corr_bzid_simulation_main(N, sim, alpha, p1, p2)
+corr_bzid_simulation_stats(df.sim, alpha, p1, p2)
+
+########################################
+# BOUNDS ESTIMATION
+########################################
+
+#########################
+# INFLATION COMBINATION 1
+#########################
+
+# Inflation probabilities
+p1 <- .2
+p2 <- .2
+
+# Simulations
+bnd_res <- bnd_bzid_simulation_main(N, sim, p1, p2)
+
+# Statistics
+bnd_bzid_simulation_stats(bnd_res, p1, p2)        
+
+#########################
+# INFLATION COMBINATION 2
+#########################
+
+# Inflation probabilities
+p1 <- .2
+p2 <- .8
+
+# Simulations
+bnd_res <- bnd_bzid_simulation_main(N, sim, p1, p2)
+
+# Statistics
+bnd_bzid_simulation_stats(bnd_res, p1, p2)  
+
+#########################
+# INFLATION COMBINATION 3
+#########################
+
+# Inflation probabilities
+p1 <- .8
+p2 <- .8
+
+# Simulations
+bnd_res <- bnd_bzid_simulation_main(N, sim, p1, p2)
+
+# Statistics
+bnd_bzid_simulation_stats(bnd_res, p1, p2)  
