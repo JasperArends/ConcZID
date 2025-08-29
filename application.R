@@ -2,6 +2,9 @@
 # APPLICATION EXAMPLE
 ########################################
 
+# Load dependencies
+source("main_estimators.R")
+
 # Load data
 library(fitdistrplus)
 data(danishmulti)
