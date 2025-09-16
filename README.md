@@ -10,6 +10,9 @@ Based on Arends, J.R.M., Lyu, G., Mesfioui, M., Perrone, E., and Trufin, J. (202
 **application.R**
 Example of how the estimators of the measures and their bounds can be computed for the Danish insurance dataset in `fitdistrplus`.
 
+**figures.R**
+Code used to create the figures from the paper.
+
 **main_estimators.R**
 Estimators for Gini's gamma, Spearman's footrule and Spearman's rho for zero-inflated continuous distributions and their corresponding bounds.
 
