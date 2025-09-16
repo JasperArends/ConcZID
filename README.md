@@ -3,7 +3,7 @@ Estimators of Gini's gamma, Spearman's footrule and Spearman's rho for zero-infl
 Based on Arends, J.R.M., Lyu, G., Mesfioui, M., Perrone, E., and Trufin, J. (2025). *Rank-based concordance measures for zero-inflated continuous distributions and their best-possible upper and lower bounds.* In preparation.
 
 ## Required libraries
-`Metrics` `ggplot2` `fitdistrplus`
+`dplyr` `fitdistrplus` `ggplot2` `Metrics` `pals`
 
 ## Files
 
