@@ -1,4 +1,4 @@
-# Rank-based concordance measures for zero-inflated continuous distributions
+# Rank-based concordance for zero-inflated data
 Estimators of Gini's gamma, Spearman's footrule and Spearman's rho for zero-inflated continuous distributions and their corresponding upper and lower bounds.
 Based on Arends, J.R.M., Lyu, G., Mesfioui, M., Perrone, E., and Trufin, J. (2025). *Rank-based concordance for zero-inflated data: New representations, estimators, and sharp bounds.* In preparation.
 
