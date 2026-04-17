@@ -61,6 +61,7 @@ spm_foot.est <- function(X, Y) {
 ####################
 # SPEARMAN'S RHO
 ####################
+# Proposed estimator
 spm_rho.est <- function(X, Y) {
   # Ensure X and Y are numeric vectors
   if (!is.numeric(X) || !is.numeric(Y)) {
@@ -112,6 +113,87 @@ spm_rho.est <- function(X, Y) {
     3 * (p11 * p00 - p10 * p01) + 3 * p11 * (p10 * (1 - 2 * p1s) + p01 * (1 - 2 * p2s))
   
   return ( rho )
+}
+
+# Pimentel (2009)
+spm_rho.est_Pimentel <- function(X, Y) {
+  # Ensure X and Y are numeric vectors
+  if (!is.numeric(X) || !is.numeric(Y)) {
+    stop("X and Y must be numeric vectors.")
+  }
+  
+  # Number of observations
+  N <- length(X)
+  if (length(Y) != N) {
+    stop("X and Y must have the same length.")
+  }
+  
+  # Probability masses
+  p11 <- sum(X > 0 & Y > 0)/N
+  p10 <- sum(X > 0 & Y == 0)/N
+  p01 <- sum(X == 0 & Y > 0)/N
+  p00 <- sum(X == 0 & Y == 0)/N
+  
+  X11 <- which(X > 0 & Y > 0)
+  rho11 <- cor(X[X11], Y[X11], method="spearman")
+  
+  rho <- p11 * (p11 + p10)*(p11 + p01) * rho11 + 3*(p00*p11 - p10*p01)
+  
+  return ( rho )
+}
+
+# Mesfioui and Trufin (2022)
+spm_rho.est_Mesfioui <- function(X, Y) {
+  # Ensure X and Y are numeric vectors
+  if (!is.numeric(X) || !is.numeric(Y)) {
+    stop("X and Y must be numeric vectors.")
+  }
+  
+  # Number of observations
+  N <- length(X)
+  if (length(Y) != N) {
+    stop("X and Y must have the same length.")
+  }
+  
+  p1 <- sum(X == 0)/N # P(X = 0)
+  p2 <- sum(Y == 0)/N # P(Y = 0)
+  
+  Fhx <- (rank(X, ties.method="max") - sum(X == 0))/sum(X > 0)
+  Ghy <- (rank(Y, ties.method="max") - sum(Y == 0))/sum(Y > 0)
+  
+  # Fx <- (rank(X, ties.method="max") - p1 * N)/(1 - p1 * N) # P(X <= x | X > 0)
+  # Gy <- (rank(Y, ties.method="max") - p2 * N)/(1 - p2 * N) # P(Y <= y | Y > 0)
+  
+  xi1 <- p1 * (X == 0) + 2 * (p1 + (1 - p1) * Fhx) * (X > 0) - 1
+  xi2 <- p2 * (Y == 0) + 2 * (p2 + (1 - p2) * Ghy) * (Y > 0) - 1
+  
+  Q <- 1/4 * mean((1 + xi1)*(1 + xi2) + (1 - xi1)*(1 - xi2))
+  
+  return ( 6*Q - 3 )
+}
+
+# Nasri and Rémillard (2024)
+spm_rho.est_Nasri <- function(X, Y) {
+  # Ensure X and Y are numeric vectors
+  if (!is.numeric(X) || !is.numeric(Y)) {
+    stop("X and Y must be numeric vectors.")
+  }
+  
+  # Number of observations
+  N <- length(X)
+  if (length(Y) != N) {
+    stop("X and Y must have the same length.")
+  }
+  
+  Fx <- rank(X, ties.method="max")/N      # P(X <= x)
+  Fxm <- (rank(X, ties.method="min")-1)/N # P(X <  x)
+  Gy <- rank(Y, ties.method="max")/N      # P(Y <= y)
+  Gym <- (rank(Y, ties.method="min")-1)/N # P(Y <  y)
+  
+  K1 <- (Fx^2 - Fxm^2)/(Fx - Fxm)
+  K2 <- (Gy^2 - Gym^2)/(Gy - Gym)
+  
+  return( 3*sum((K1 - 1) * (K2 - 1))/N )
 }
 
 ########################################
