@@ -6,6 +6,9 @@
 # IMPORT LIBRARIES
 ####################
 library(Metrics)
+library(boot)
+library(dplyr)
+library(doParallel)
 
 ####################
 # GENERATE SAMPLE
@@ -15,12 +18,10 @@ gen_sample <- function(N, alpha, p1, p2) {
   U <- matrix(nrow=N, ncol=2) # Sample
   U[,1] <- runif(N) # X
   
-  Z <- runif(N, min=0, max=1) # Decision variable
+  B <- rbinom(N, 1, alpha) # Decision variable
   V <- runif(N, min=0, max=1) # Independent sample
   
-  U[,2] <- (Z <= alpha & alpha > 0) * U[,1] + # Upper Fréchet-Hoeffding copula
-    (Z <= -alpha & alpha < 0) * (1 - U[,1]) + # Lower Fréchet-Hoeffding copula
-    (Z > abs(alpha)) * V # Independence copula
+  U[,2] <- B * U[,1] + (1 - B) * V
   
   # Induce inflation
   U[U[,1] <= p1, 1] <- 0
@@ -29,14 +30,13 @@ gen_sample <- function(N, alpha, p1, p2) {
   return ( U )
 }
 
-
 ####################
-# MAIN ESTIMATORS
+# SINGLE SIMULATION
 ####################
 
-corr_bzid_simulation_main <- function(N, sim, alpha, p1, p2) {
-  # Ensure N and sim and alpha are numeric
-  if (!is.numeric(N) || !is.numeric(sim) || !is.numeric(alpha)) {
+perf_sim <- function(N, bsim, alpha, p1, p2) {
+  # Ensure N, sim and alpha are numeric
+  if (!is.numeric(N) || !is.numeric(bsim) || !is.numeric(alpha)) {
     stop("N, sim and alpha must be numeric.")
   }
   
@@ -45,25 +45,74 @@ corr_bzid_simulation_main <- function(N, sim, alpha, p1, p2) {
     stop("p1 and p2 must be numeric.")
   }
   
-  # Create data frames
-  results <- data.frame(matrix(nrow=0, ncol=4))
-  colnames(results) <- c("Simulation", "Gini_gamma", "Spm_foot", "Spm_rho")
+  # Generate sample
+  X <- gen_sample(N, alpha, p1, p2)
   
-  # Perform simulation
-  for (ix in 1:sim) {
-    # Generate sample
-    X <- gen_sample(N, alpha, p1, p2)
+  # Assume p1 <= p2
+  if (sum(X[,2] == 0) < sum(X[,1] == 0))
+    X <- X[,c(2, 1)]
+  
+  # Compute estimates
+  estimates <- c(gini_gamma.est(X[,1], X[,2]),
+                 spm_foot.est(X[,1], X[,2]),
+                 spm_rho.est(X[,1], X[,2]))
+  
+  # Bootstrap for variance estimation
+  if (bsim > 0) {
+    conc.boot <- function(X) {
+      # Resample
+      Y <- X[sample(1:nrow(X), size=nrow(X), replace=TRUE),]
+      
+      # Solve ties away from zero
+      Y[Y[,1] > 0,1] <- Y[Y[,1] > 0,1] %>% rank(ties.method="random")
+      Y[Y[,2] > 0,2] <- Y[Y[,2] > 0,2] %>% rank(ties.method="random")
+      
+      # Ensure p1 <= p2
+      if (sum(Y[,1] == 0) > sum(Y[,2] == 0)) # Ensure p1 <= p2
+        Y <- Y[,c(2, 1)]
+      
+      # Compute estimates
+      return ( c(gini_gamma.est(Y[,1], Y[,2]),
+                 spm_foot.est(Y[,1], Y[,2]),
+                 spm_rho.est(Y[,1], Y[,2])) )
+    }
     
-    # Assume p1 <= p2
-    if (sum(X[,2] == 0) < sum(X[,1] == 0))
-      X <- X[,c(2, 1)]
+    # Perform bootstrap
+    boot.sd <- do.call("rbind", lapply(1:bsim, function(ix) conc.boot(X))) %>%
+      data.frame() %>%
+      rename(Gini_gamma=X1, Spm_foot=X2, Spm_rho=X3) %>%
+      apply(2, sd) # Estimate standard deviation
     
-    # Compute estimates
-    results[ix,] <- c(ix,
-                      gini_gamma.est(X[,1], X[,2]),
-                      spm_foot.est(X[,1], X[,2]),
-                      spm_rho.est(X[,1], X[,2]))
+    return ( c(estimates, boot.sd) )
   }
+  
+  return ( c(estimates, rep(NA, 3)) )
+}
+
+####################
+# MAIN SIMULATION
+# FUNCTIONS
+####################
+
+corr_bzid_simulation_main <- function(N, sim, bsim, alpha, p1, p2) {
+  # Ensure N, sim and alpha are numeric
+  if (!is.numeric(N) || !is.numeric(sim) || !is.numeric(bsim) || !is.numeric(alpha)) {
+    stop("N, sim, bism and alpha must be numeric.")
+  }
+  
+  # Ensure p1 and p2 are numeric
+  if (!is.numeric(p1) || !is.numeric(p2)) {
+    stop("p1 and p2 must be numeric.")
+  }
+  
+  results <- foreach (ix = 1:sim, .combine=rbind,
+                      .packages='dplyr', .export=c("perf_sim", "gen_sample")) %dopar% {
+    source('./Spearmans rho/Submissions/SP2025/GitHub/main_estimators.R')
+    perf_sim(N, bsim, alpha, p1 ,p2)
+  } %>% data.frame()
+  
+  colnames(results) <- c("Gini_gamma", "Spm_foot", "Spm_rho",
+                         "sd_gamma", "sd_foot", "sd_rho")
   
   return ( results )
 }
@@ -78,41 +127,84 @@ corr_bzid_simulation_stats <- function(results, alpha, p1, p2) {
                       spm_rho.bound(p1,p2)$lw * alpha * (alpha < 0))
   
   # Statistics
-  corr_stat <- data.frame(matrix(nrow=3, ncol=7))
-  colnames(corr_stat) <- c("Variable", "True", "Mean", "Variance", "MSE", "Left_95CI", "Right_95CI")
+  corr_stat <- data.frame(matrix(nrow=3, ncol=11)) %>%
+    rename(Variable=X1, True=X2, Mean=X3, MSE=X4,
+           sd=X5, boot.dev_est=X6, boot.dev_sd=X7,
+           ShapiroW=X8, Shapirop=X9,
+           Left_95CI=X10, Right_95CI=X11)
+  
+  # The 'Variable' refers to (1) Gini's gamma, (2) Spearman's footrule and
+  # (3) Spearman's rho
   
   # Gini's gamma
-  corr_stat[1,] <- c("Gini's gamma",
+  corr_stat[1,] <- c(1,
                      conc_true$gini_gamma,
-                     mean(results[,2]),
-                     var(results[,2]),
-                     mse(conc_true$gini_gamma, results[,2]),
+                     mean(results[,1]),
+                     mse(conc_true$gini_gamma, results[,1]),
+                     sd(results[,1]), mean(results[,4]), sd(results[,4]),
+                     shapiro.test(results[,2])[1:2],
                      quantile(results[,2], 0.025)[[1]],
                      quantile(results[,2], 0.975)[[1]]
-                     )
+  )
   
   # Spearman's footrule
-  corr_stat[2,] <- c("Spearman's footrule",
+  corr_stat[2,] <- c(2,
                      conc_true$spm_foot,
-                     mean(results[,3]),
-                     var(results[,3]),
-                     mse(conc_true$spm_foot, results[,3]),
-                     quantile(results[,3], 0.025)[[1]],
-                     quantile(results[,3], 0.975)[[1]]
-                     )
+                     mean(results[,2]),
+                     mse(conc_true$spm_foot, results[,2]),
+                     sd(results[,2]), mean(results[,5]), sd(results[,5]),
+                     shapiro.test(results[,2])[1:2],
+                     quantile(results[,2], 0.025)[[1]],
+                     quantile(results[,2], 0.975)[[1]]
+  )
   
   # Spearman's rho
-  corr_stat[3,] <- c("Spearman's rho",
+  corr_stat[3,] <- c(3,
                      conc_true$spm_rho,
-                     mean(results[,4]),
-                     var(results[,4]),
-                     mse(conc_true$spm_rho, results[,4]),
-                     quantile(results[,4], 0.025)[[1]],
-                     quantile(results[,4], 0.975)[[1]]
-                     )
+                     mean(results[,3]),
+                     mse(conc_true$spm_rho, results[,3]),
+                     sd(results[,3]), mean(results[,6]), sd(results[,6]),
+                     shapiro.test(results[,3])[1:2],
+                     quantile(results[,3], 0.025)[[1]],
+                     quantile(results[,3], 0.975)[[1]]
+  )
   
   return ( corr_stat )
 }
+
+####################
+# COMPARISON OF
+# SPEARMAN'S RHO
+####################
+corr_bzid_spm_rho_main <- function(N, sim, alpha, p1, p2) {
+  
+  results <- data.frame(matrix(nrow=sim, ncol=4))
+  colnames(results) <- c("Pimentel", "Mesfioui",
+                         "Nasri", "Arends")
+  
+  for (ix in 1:sim) {
+    X <- gen_sample(N, alpha, p1, p2)
+    
+    results[ix,] <- c(spm_rho.est_Pimentel(X[,1], X[,2]),
+                      spm_rho.est_Mesfioui(X[,1], X[,2]),
+                      spm_rho.est_Nasri(X[,1], X[,2]),
+                      spm_rho.est(X[,1], X[,2]))
+  }
+  
+  return ( results )
+}
+
+corr_bzid_spm_rho_stats <- function(results, alpha, p1, p2) {
+  spm_true <- spm_rho.bound(p1,p2)$up * alpha * (alpha > 0) -
+    spm_rho.bound(p1,p2)$lw * alpha * (alpha < 0)
+  
+  stat <- data.frame(Estimator=1:4,
+                     Mean=apply(results, 2, mean), 
+                     MSE=apply(results, 2, function(x) mse(spm_true,x)))
+  
+  return ( stat )
+}
+
 
 ####################
 # BOUND ESTIMATORS
@@ -166,11 +258,11 @@ bnd_bzid_simulation_main <- function(N, sim, p1, p2) {
 bnd_bzid_simulation_stats <- function(results, p1, p2) {
   # Compute true values
   bnd_true <- list(gini_gamma.lw = gini_gamma.bound(p1,p2)$lw,
-                    gini_gamma.up = gini_gamma.bound(p1,p2)$up,
-                    spm_foot.lw = spm_foot.bound(p1,p2)$lw,
-                    spm_foot.up = spm_foot.bound(p1,p2)$up,
-                    spm_rho.lw = spm_rho.bound(p1,p2)$lw,
-                    spm_rho.up = spm_rho.bound(p1,p2)$up)
+                   gini_gamma.up = gini_gamma.bound(p1,p2)$up,
+                   spm_foot.lw = spm_foot.bound(p1,p2)$lw,
+                   spm_foot.up = spm_foot.bound(p1,p2)$up,
+                   spm_rho.lw = spm_rho.bound(p1,p2)$lw,
+                   spm_rho.up = spm_rho.bound(p1,p2)$up)
   
   # Statistics
   bnd_stat <- data.frame(matrix(nrow=3, ncol=7))
@@ -179,32 +271,32 @@ bnd_bzid_simulation_stats <- function(results, p1, p2) {
   
   # Gini's gamma
   bnd_stat[1,] <- c("Gini's gamma",
-                     bnd_true$gini_gamma.lw,
-                     bnd_true$gini_gamma.up,
-                     mean(results$gamma_lw),
-                     mean(results$gamma_up),
-                     mse(bnd_true$gini_gamma.lw, results$gamma_lw),
-                     mse(bnd_true$gini_gamma.up, results$gamma_up)
+                    bnd_true$gini_gamma.lw,
+                    bnd_true$gini_gamma.up,
+                    mean(results$gamma_lw),
+                    mean(results$gamma_up),
+                    mse(bnd_true$gini_gamma.lw, results$gamma_lw),
+                    mse(bnd_true$gini_gamma.up, results$gamma_up)
   )
   
   # Spearman's footrule
   bnd_stat[2,] <- c("Spearman's footrule",
-                     bnd_true$spm_foot.lw,
-                     bnd_true$spm_foot.up,
-                     mean(results$foot_lw),
-                     mean(results$foot_up),
-                     mse(bnd_true$spm_foot.lw, results$foot_lw),
-                     mse(bnd_true$spm_foot.up, results$foot_up)
+                    bnd_true$spm_foot.lw,
+                    bnd_true$spm_foot.up,
+                    mean(results$foot_lw),
+                    mean(results$foot_up),
+                    mse(bnd_true$spm_foot.lw, results$foot_lw),
+                    mse(bnd_true$spm_foot.up, results$foot_up)
   )
   
   # Spearman's rho
   bnd_stat[3,] <- c("Spearman's rho",
-                     bnd_true$spm_rho.lw,
-                     bnd_true$spm_rho.up,
-                     mean(results$rho_lw),
-                     mean(results$rho_up),
-                     mse(bnd_true$spm_rho.lw, results$rho_lw),
-                     mse(bnd_true$spm_rho.up, results$rho_up)
+                    bnd_true$spm_rho.lw,
+                    bnd_true$spm_rho.up,
+                    mean(results$rho_lw),
+                    mean(results$rho_up),
+                    mse(bnd_true$spm_rho.lw, results$rho_lw),
+                    mse(bnd_true$spm_rho.up, results$rho_up)
   )
   
   return ( bnd_stat )
